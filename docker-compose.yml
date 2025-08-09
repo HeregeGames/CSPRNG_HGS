@@ -1,0 +1,78 @@
+version: '3.3'
+
+services:
+  mixer:
+    build: .
+    command: python mixer_server.py
+    container_name: mixer
+    ports:
+      - "5000:5000"
+    networks:
+      - rng_network
+    restart: unless-stopped
+  
+  generator:
+    build: .
+    command: python generator_server.py
+    container_name: generator
+    ports:
+      - "5001:5001"
+    networks:
+      - rng_network
+    depends_on:
+      - mixer
+    restart: unless-stopped
+    
+  harvester_radio:
+    build: .
+    command: python harvester_radio.py
+    container_name: harvester_radio
+    networks:
+      - rng_network
+    depends_on:
+      - mixer
+    restart: unless-stopped
+
+  harvester_currency:
+    build: .
+    command: python harvester_currency.py
+    container_name: harvester_currency
+    networks:
+      - rng_network
+    depends_on:
+      - mixer
+    restart: unless-stopped
+  
+  harvester_blockchain:
+    build: .
+    command: python harvester_blockchain.py
+    container_name: harvester_blockchain
+    networks:
+      - rng_network
+    depends_on:
+      - mixer
+    restart: unless-stopped
+    
+  harvester_weather:
+    build: .
+    command: python harvester_weather.py
+    container_name: harvester_weather
+    networks:
+      - rng_network
+    depends_on:
+      - mixer
+    restart: unless-stopped
+    
+  harvester_latency:
+    build: .
+    command: python harvester_latency.py
+    container_name: harvester_latency
+    networks:
+      - rng_network
+    depends_on:
+      - mixer
+    restart: unless-stopped
+
+networks:
+  rng_network:
+    driver: bridge

@@ -1,0 +1,5 @@
+flask
+requests
+cryptography
+boto3
+alpha_vantage
