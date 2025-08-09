@@ -31,27 +31,23 @@ def _increment_counter():
 
 def _mix_bytes(data: bytes):
     """
-    Mistura dados no pool usando um algoritmo de mistura robusto (hash + XOR).
+    Mistura dados no pool usando um algoritmo de mistura robusto (hash + XOR com múltiplas iterações).
     """
     global entropy_pool
     with pool_lock:
-        # Cria um hash de todo o pool + nova entropia + sal local + contador
+        # Use o pool, a nova entropia e um sal temporário para misturar o hash
         hasher = hashlib.sha512()
         hasher.update(entropy_pool)
         hasher.update(data)
         hasher.update(os.urandom(SEED_SIZE))
-        hasher.update(_counter.to_bytes(8, 'big', signed=False))
-        digest = hasher.digest()
-
-        # XOR o hash com o pool para uma mistura completa e uniforme
-        for i in range(ENTROPY_POOL_SIZE):
-            entropy_pool[i] ^= digest[i % len(digest)]
-
-        # Mistura novamente após a mistura
-        hasher = hashlib.sha512()
-        hasher.update(entropy_pool)
-        digest = hasher.digest()
         
+        # Mistura em várias iterações para garantir a difusão da entropia
+        for _ in range(5):
+            hasher.update(hasher.digest())
+        
+        digest = hasher.digest()
+
+        # XOR o hash final com o pool para uma mistura completa e uniforme
         for i in range(ENTROPY_POOL_SIZE):
             entropy_pool[i] ^= digest[i % len(digest)]
         

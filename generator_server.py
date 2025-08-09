@@ -22,13 +22,14 @@ class DeterministicCSPRNG:
         self._rekey()
 
     def _rekey(self):
-        """Deriva uma nova chave e contador da semente para ressincronização."""
-        hashed_seed = hashlib.sha512(self._seed).digest()
-        self._key = hashed_seed[:32]
-        self._counter = hashed_seed[32:48]
+        """Deriva uma nova chave e nonce da semente para ressincronização."""
+        # Usa a semente para derivar a chave
+        self._key = hashlib.sha256(self._seed).digest()
+        # Usa uma parte do hash da semente e um contador para o nonce
+        self._nonce = hashlib.sha512(self._seed).digest()[32:48]
         self._backend = default_backend()
         
-        cipher = Cipher(algorithms.AES(self._key), modes.CTR(self._counter), backend=self._backend)
+        cipher = Cipher(algorithms.AES(self._key), modes.CTR(self._nonce), backend=self._backend)
         self._encryptor = cipher.encryptor()
         
         self._bytes_generated = 0
