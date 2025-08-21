@@ -1,109 +1,102 @@
-version: '3.8'
-
-services:
-  mixer:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    command: python mixer_server.py
-    container_name: mixer
-    ports:
-      - "5000:5000"
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-    restart: unless-stopped
+ version: '3.8'
+ 
+ services:
+   mixer:
+     build:
+       context: .
+       dockerfile: services/mixer/Dockerfile
+     container_name: mixer
+     ports:
+       - "5000:5000"
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     restart: unless-stopped
+   
+   generator:
+     build:
+       context: .
+       dockerfile: services/generator/Dockerfile
+     container_name: generator
+     ports:
+       - "5001:5001"
+     env_file:
+       - .env
+     networks:
+       - rng_network
+       - herege-network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+   harvester_radio:
+     build:
+       context: .
+       dockerfile: services/harvester_radio/Dockerfile
+     container_name: harvester_radio
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
   
-  generator:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    command: python generator_server.py
-    container_name: generator
-    ports:
-      - "5001:5001"
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-      - herege-network
-    depends_on:
-      - mixer
-    restart: unless-stopped
-    
-  harvester_radio:
-    build:
-      context: .
-      dockerfile: Dockerfile.radio
-    command: python harvester_radio.py
-    container_name: harvester_radio
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-    depends_on:
-      - mixer
-    restart: unless-stopped
-
-  harvester_currency:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    command: python harvester_currency.py
-    container_name: harvester_currency
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-    depends_on:
-      - mixer
-    restart: unless-stopped
-  
-  harvester_blockchain:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    command: python harvester_blockchain.py
-    container_name: harvester_blockchain
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-    depends_on:
-      - mixer
-    restart: unless-stopped
-    
-  harvester_weather:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    command: python harvester_weather.py
-    container_name: harvester_weather
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-    depends_on:
-      - mixer
-    restart: unless-stopped
-    
-  harvester_latency:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    command: python harvester_latency.py
-    container_name: harvester_latency
-    environment:
-      - API_AUTH_KEY=SUA_CHAVE_SECRETA_AQUI
-    networks:
-      - rng_network
-    depends_on:
-      - mixer
-    restart: unless-stopped
-
-networks:
-  rng_network:
-    driver: bridge
-  herege-network:
-    external: true
+   harvester_currency:
+     build:
+       context: .
+       dockerfile: services/harvester_currency/Dockerfile
+     container_name: harvester_currency
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+   
+   harvester_blockchain:
+     build:
+       context: .
+       dockerfile: services/harvester_blockchain/Dockerfile
+     container_name: harvester_blockchain
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+   harvester_weather:
+     build:
+       context: .
+       dockerfile: services/harvester_weather/Dockerfile
+     container_name: harvester_weather
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+   harvester_latency:
+     build:
+       context: .
+       dockerfile: services/harvester_latency/Dockerfile
+     container_name: harvester_latency
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+ networks:
+   rng_network:
+     driver: bridge
+   herege-network:
+     external: true
