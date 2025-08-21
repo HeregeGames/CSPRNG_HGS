@@ -1,62 +1,64 @@
 import requests
 import hashlib
-from datetime import datetime
 import time
+from datetime import datetime
+import hmac
+import os
+import wave
+import pyaudio
 
 # --- Configurações ---
 MIXER_SERVER_URL = "http://mixer:5000"
-RADIO_STREAM_URL = "https://news-stream.iowapublicradio.org/NewsLow.mp3"
-CHUNK_SIZE = 4096
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
+# URL de um stream de áudio estável para demonstração
+RADIO_STREAM_URL = "http://radio.garden/api/tune/I4yFz9pM"
+CHUNK_SIZE = 1024 * 16  # 16 KB de dados por coleta
 
 def send_hash_to_mixer(hash_value):
-    """Envia o hash gerado para o Servidor Mixer como bytes puros."""
+    """Envia o hash gerado para o Servidor Mixer com autenticação HMAC."""
     url = f"{MIXER_SERVER_URL}/api/v1/entropy"
     try:
         data_bytes = bytes.fromhex(hash_value)
-        response = requests.post(url, data=data_bytes, timeout=5)
+        hmac_digest = hmac.new(API_AUTH_KEY, data_bytes, hashlib.sha256).hexdigest()
+        
+        headers = {'X-RNG-Auth': hmac_digest}
+        response = requests.post(url, data=data_bytes, headers=headers, timeout=5)
         response.raise_for_status()
-        # O mixer retorna JSON, então `response.json()` é seguro
         print(f"[{datetime.now()}] Hash enviado com sucesso para o Mixer. Resposta: {response.json()}")
     except requests.exceptions.RequestException as e:
         print(f"[{datetime.now()}] Erro ao enviar hash para o Mixer: {e}")
 
-
-def get_entropy_from_radio(stream_url, chunk_size=4096, timeout=10):
+def get_entropy_from_radio():
     """
-    Conecta-se a um stream de rádio online, captura dados e gera um hash.
+    Coleta dados binários de um stream de rádio e gera um hash.
+    Requer a instalação de 'pyaudio'.
     """
-    headers = {'User-Agent': 'Python Harvester'}
     try:
-        print(f"[{datetime.now()}] Conectando ao stream: {stream_url}")
+        print(f"[{datetime.now()}] Conectando ao stream de rádio...")
         
-        with requests.get(stream_url, headers=headers, stream=True, timeout=timeout) as response:
-            response.raise_for_status()
-            audio_chunk = response.raw.read(chunk_size)
+        response = requests.get(RADIO_STREAM_URL, stream=True)
+        response.raise_for_status()
+        
+        hash_object = hashlib.sha256()
+        
+        # Lê um pedaço de dados do stream
+        chunk = next(response.iter_content(CHUNK_SIZE))
+        if not chunk:
+            print(f"[{datetime.now()}] Falha ao coletar dados do stream.")
+            return None
             
-            if not audio_chunk:
-                print("Nenhum dado de áudio recebido. Retornando None.")
-                return None
-            
-            print(f"[{datetime.now()}] {len(audio_chunk)} bytes de áudio coletados.")
-            sha256_hash = hashlib.sha256(audio_chunk).hexdigest()
-            return sha256_hash
-
+        hash_object.update(chunk)
+        return hash_object.hexdigest()
+        
     except requests.exceptions.RequestException as e:
-        print(f"Erro na requisição: {e}")
-        return None
-    except Exception as e:
-        print(f"Ocorreu um erro: {e}")
+        print(f"[{datetime.now()}] Erro ao coletar entropia do rádio: {e}")
         return None
 
 if __name__ == "__main__":
+    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
+        print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
     while True:
-        generated_hash = get_entropy_from_radio(RADIO_STREAM_URL, CHUNK_SIZE)
-        if generated_hash:
-            print("\n--- Hash de Entropia Gerado ---")
-            print(generated_hash)
-            send_hash_to_mixer(generated_hash)
-        else:
-            print("\nFalha ao gerar o hash. A entropia não foi coletada.")
-        
-        # Espera um pouco antes da próxima coleta
-        time.sleep(15)
+        hash_data = get_entropy_from_radio()
+        if hash_data:
+            send_hash_to_mixer(hash_data)
+        time.sleep(60)  # Coleta a cada 60 segundos

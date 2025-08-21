@@ -7,12 +7,16 @@ from datetime import datetime
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import threading
+import json
+import random
+import hmac
 
 app = Flask(__name__)
 
 # --- Configurações ---
 MIXER_SERVER_URL = "http://mixer:5000"
-REKEY_INTERVAL_MB = 100 # Re-sincronizar a cada 100MB
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
+REKEY_INTERVAL_MB = 100
 
 class DeterministicCSPRNG:
     def __init__(self, seed: bytes):
@@ -23,9 +27,7 @@ class DeterministicCSPRNG:
 
     def _rekey(self):
         """Deriva uma nova chave e nonce da semente para ressincronização."""
-        # Usa a semente para derivar a chave
         self._key = hashlib.sha256(self._seed).digest()
-        # Usa uma parte do hash da semente e um contador para o nonce
         self._nonce = hashlib.sha512(self._seed).digest()[32:48]
         self._backend = default_backend()
         
@@ -37,7 +39,6 @@ class DeterministicCSPRNG:
 
     def generate(self, num_bytes: int) -> bytes:
         with self._lock:
-            # Verifica se é hora de re-sincronizar
             if self._bytes_generated >= REKEY_INTERVAL_MB * 1024 * 1024:
                 print(f"[{datetime.now()}] Limite de {REKEY_INTERVAL_MB}MB atingido. Buscando nova semente...")
                 new_seed = fetch_new_seed_with_retry()
@@ -55,7 +56,10 @@ def fetch_new_seed_with_retry():
     retries = 10
     while retries > 0:
         try:
-            response = requests.get(f"{MIXER_SERVER_URL}/api/v1/seed", timeout=5)
+            hmac_digest = hmac.new(API_AUTH_KEY, b'', hashlib.sha256).hexdigest()
+            headers = {'X-RNG-Auth': hmac_digest}
+            
+            response = requests.get(f"{MIXER_SERVER_URL}/api/v1/seed", headers=headers, timeout=5)
             response.raise_for_status()
             
             new_seed = response.content
@@ -68,7 +72,29 @@ def fetch_new_seed_with_retry():
     print(f"[{datetime.now()}] Falha crítica: Não foi possível conectar ao Mixer após várias tentativas.")
     return None
 
-# --- Rotas da API ---
+def perform_weighted_draw(symbols: list, num_draws: int, csprng: DeterministicCSPRNG):
+    """
+    Realiza um sorteio ponderado de símbolos usando o CSPRNG.
+    """
+    drawn_symbols = []
+    
+    weighted_list = []
+    for symbol in symbols:
+        weighted_list.extend([symbol['name']] * symbol['weight'])
+        
+    required_bytes = num_draws * 4
+    random_bytes = csprng.generate(required_bytes)
+    
+    list_size = len(weighted_list)
+    
+    for i in range(num_draws):
+        sub_bytes = random_bytes[i*4 : (i+1)*4]
+        random_value = int.from_bytes(sub_bytes, 'big')
+        
+        index = random_value % list_size
+        drawn_symbols.append(weighted_list[index])
+    
+    return drawn_symbols
 
 @app.route("/api/v1/games/slot_5x3", methods=["GET"])
 def get_slot_5x3_numbers():
@@ -86,6 +112,29 @@ def get_slot_5x3_numbers():
         "status": "success"
     })
 
+@app.route("/api/v1/games/draw_symbols", methods=["POST"])
+def draw_symbols_from_config():
+    request_data = request.json
+    symbols_config = request_data.get("symbols")
+    
+    if not symbols_config or not isinstance(symbols_config, list):
+        return jsonify({"status": "error", "message": "Invalid symbols configuration provided."}), 400
+    
+    new_seed = fetch_new_seed_with_retry()
+    if not new_seed:
+        return jsonify({"status": "error", "message": "Generator not initialized."}), 500
+    
+    try:
+        csprng = DeterministicCSPRNG(new_seed)
+        drawn_symbols = perform_weighted_draw(symbols_config, 15, csprng)
+        
+        return jsonify({
+            "status": "success",
+            "drawn_symbols": drawn_symbols
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route("/api/v1/stream_entropy", methods=["GET"])
 def get_raw_entropy_stream():
     new_seed = fetch_new_seed_with_retry()
@@ -101,4 +150,6 @@ def get_raw_entropy_stream():
     return Response(generate_stream_forever(), mimetype='application/octet-stream')
 
 if __name__ == "__main__":
+    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
+        print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
     app.run(host="0.0.0.0", port=5001, debug=True)

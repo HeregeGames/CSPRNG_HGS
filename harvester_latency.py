@@ -2,80 +2,60 @@ import requests
 import hashlib
 import time
 from datetime import datetime
+import hmac
+import os
+import ping3
 
 # --- Configurações ---
 MIXER_SERVER_URL = "http://mixer:5000"
-
-
-# Lista de servidores globais para testar a latência
-SERVERS = [
-    "https://www.google.com",
-    "https://www.cloudflare.com",
-    "https://www.amazon.com",
-    "https://www.microsoft.com",
-    "https://www.wikipedia.org"
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
+SERVERS_TO_PING = [
+    "8.8.8.8",   # Google DNS
+    "1.1.1.1",   # Cloudflare DNS
+    "9.9.9.9",   # Quad9 DNS
+    "208.67.222.222" # OpenDNS
 ]
 
 def send_hash_to_mixer(hash_value):
-    """Envia o hash gerado para o Servidor Mixer como bytes puros."""
+    """Envia o hash gerado para o Servidor Mixer com autenticação HMAC."""
     url = f"{MIXER_SERVER_URL}/api/v1/entropy"
     try:
         data_bytes = bytes.fromhex(hash_value)
-        response = requests.post(url, data=data_bytes, timeout=5)
+        hmac_digest = hmac.new(API_AUTH_KEY, data_bytes, hashlib.sha256).hexdigest()
+        
+        headers = {'X-RNG-Auth': hmac_digest}
+        response = requests.post(url, data=data_bytes, headers=headers, timeout=5)
         response.raise_for_status()
-        # O mixer retorna JSON, então `response.json()` é seguro
         print(f"[{datetime.now()}] Hash enviado com sucesso para o Mixer. Resposta: {response.json()}")
     except requests.exceptions.RequestException as e:
         print(f"[{datetime.now()}] Erro ao enviar hash para o Mixer: {e}")
 
-
 def get_entropy_from_latency():
     """
-    Mede a latência de múltiplos servidores globais e gera um hash.
+    Mede a latência para uma lista de servidores e gera um hash a partir dos resultados.
     """
-    try:
-        concatenated_data = ""
-        for server in SERVERS:
-            print(f"[{datetime.now()}] Testando latência para: {server}")
-            
-            try:
-                # Faz uma requisição e mede o tempo de resposta em segundos
-                response = requests.get(server, timeout=10)
-                latency_ms = int(response.elapsed.total_seconds() * 1000)
-                concatenated_data += str(latency_ms)
-                print(f"Latência para {server}: {latency_ms} ms")
-            except requests.exceptions.RequestException as e:
-                print(f"[{datetime.now()}] Falha na requisição para {server}: {e}. Pulando...")
-                continue
-                
-        if not concatenated_data:
-            print(f"[{datetime.now()}] Falha ao coletar dados de latência de todos os servidores.")
-            return None
-            
-        print(f"[{datetime.now()}] Dados de latência coletados: {concatenated_data}")
-        
-        # Adiciona um timestamp para mais unicidade
-        concatenated_data += str(time.time())
-        
-        data_bytes = concatenated_data.encode('utf-8')
-        sha256_hash = hashlib.sha256(data_bytes).hexdigest()
-        
-        return sha256_hash
-        
-    except Exception as e:
-        print(f"[{datetime.now()}] Ocorreu um erro ao processar os dados: {e}")
+    combined_data = ""
+    for server in SERVERS_TO_PING:
+        try:
+            delay = ping3.ping(server, unit='ms', timeout=1)
+            if delay is not None and delay is not False:
+                # Usa o tempo de resposta e o timestamp para adicionar mais entropia
+                combined_data += f"{delay:.6f}{int(time.time() * 1000)}"
+        except Exception as e:
+            print(f"[{datetime.now()}] Erro ao pingar {server}: {e}")
+    
+    if not combined_data:
+        print(f"[{datetime.now()}] Falha ao coletar dados de latência.")
         return None
 
+    hash_object = hashlib.sha256(combined_data.encode('utf-8'))
+    return hash_object.hexdigest()
+
 if __name__ == "__main__":
+    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
+        print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
     while True:
-        generated_hash = get_entropy_from_latency()
-        
-        if generated_hash:
-            print("\n--- Hash de Entropia Gerado ---")
-            print(generated_hash)
-            send_hash_to_mixer(generated_hash)
-        else:
-            print("\nFalha ao gerar o hash. A entropia não foi coletada.")
-        
-        # Pausa para dar tempo de as latências variarem naturalmente
-        time.sleep(60) # 1 minuto
+        hash_data = get_entropy_from_latency()
+        if hash_data:
+            send_hash_to_mixer(hash_data)
+        time.sleep(10)  # Coleta a cada 10 segundos
