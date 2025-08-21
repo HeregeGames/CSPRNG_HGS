@@ -56,18 +56,18 @@
        - mixer
      restart: unless-stopped
    
-   harvester_blockchain:
-     build:
-       context: .
-       dockerfile: services/harvester_blockchain/Dockerfile
-     container_name: harvester_blockchain
-     env_file:
-       - .env
-     networks:
-       - rng_network
-     depends_on:
-       - mixer
-     restart: unless-stopped
+  #  harvester_blockchain:
+  #    build:
+  #      context: .
+  #      dockerfile: services/harvester_blockchain/Dockerfile
+  #    container_name: harvester_blockchain
+  #    env_file:
+  #      - .env
+  #    networks:
+  #      - rng_network
+  #    depends_on:
+  #      - mixer
+  #    restart: unless-stopped
  
    harvester_weather:
      build:

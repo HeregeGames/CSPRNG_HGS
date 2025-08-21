@@ -120,7 +120,7 @@ def add_entropy():
 
 
 if __name__ == "__main__":
-    if API_AUTH_KEY == b"f8a2344b1d77a87560dd8f8d40982ff3b4fcb0e0b4dd0cb6a8f722a3ba4d274c":
+    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
         print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
     print(f"[{datetime.now()}] Mixer iniciado. Pool de entropia de {ENTROPY_POOL_SIZE} bytes inicializado.")
     app.run(host="0.0.0.0", port=5000, debug=True)
