@@ -11,7 +11,7 @@ app = Flask(__name__)
 # --- Configurações ---
 SEED_SIZE = 32
 ENTROPY_POOL_SIZE = 4096
-API_AUTH_KEY = os.getenv("API_AUTH_KEY", "f8a2344b1d77a87560dd8f8d40982ff3b4fcb0e0b4dd0cb6a8f722a3ba4d274c").encode('utf-8')
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
 
 # Política de Warm-up
 MIN_HARVESTER_CONTRIBUTIONS = 3

@@ -8,7 +8,7 @@ import json
 
 # --- Configurações ---
 MIXER_SERVER_URL = "http://mixer:5000"
-API_AUTH_KEY = os.getenv("API_AUTH_KEY", "f8a2344b1d77a87560dd8f8d40982ff3b4fcb0e0b4dd0cb6a8f722a3ba4d274c").encode('utf-8')
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
 API_URL = "https://api.open-meteo.com/v1/forecast"
 
 # Lista de cidades com suas coordenadas (latitude e longitude)

@@ -9,5 +9,5 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY services/generator/generator_server.py .
-COPY services/common/ ./common
+COPY services/common/ ./common/
 CMD ["python", "generator_server.py"]

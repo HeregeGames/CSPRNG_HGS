@@ -1,25 +1,34 @@
+import os
 import requests
 import hashlib
 import time
 from datetime import datetime
-
+import hmac
+import logging
+import logging.config
 from common.auth import create_hmac
+from common.logging_config import LOGGING_CONFIG
 
+# --- Configuração de Logging ---
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger(__name__)
 # --- Configurações ---
 MIXER_SERVER_URL = "http://mixer:5000"
 # Nova API pública do BlockCypher para os últimos blocos do Bitcoin
 API_URL = "https://api.blockcypher.com/v1/btc/main"
+
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
 
 def send_hash_to_mixer(hash_value):
     """Envia o hash gerado para o Servidor Mixer com autenticação HMAC."""
     url = f"{MIXER_SERVER_URL}/api/v1/entropy"
     try:
         data_bytes = bytes.fromhex(hash_value)
-        hmac_digest = create_hmac(data_bytes)
+        hmac_digest = hmac.new(API_AUTH_KEY, data_bytes, hashlib.sha256).hexdigest()
+        
         headers = {'X-RNG-Auth': hmac_digest}
         response = requests.post(url, data=data_bytes, headers=headers, timeout=5)
         response.raise_for_status()
-        # O mixer retorna JSON, então `response.json()` é seguro
         print(f"[{datetime.now()}] Hash enviado com sucesso para o Mixer. Resposta: {response.json()}")
     except requests.exceptions.RequestException as e:
         print(f"[{datetime.now()}] Erro ao enviar hash para o Mixer: {e}")
@@ -30,19 +39,19 @@ def get_entropy_from_blockchain():
     Coleta os hashes dos blocos mais recentes da blockchain do Bitcoin e gera um hash.
     """
     try:
-        print(f"[{datetime.now()}] Acessando dados da API da Blockchain...")
+        logger.info("Accessing blockchain API...", extra={'event': 'fetch_blockchain_data'})
         
         response = requests.get(API_URL, timeout=30)
         response.raise_for_status()
         data = response.json()
         
         if not data or 'hash' not in data:
-            print(f"[{datetime.now()}] Falha ao coletar dados. API retornou um formato inesperado.")
+            logger.warning("Failed to collect data. API returned unexpected format.", extra={'event': 'fetch_blockchain_data_failure', 'response_data': data})
             return None
         
         latest_block_hash = data['hash']
         
-        print(f"[{datetime.now()}] Hash do bloco mais recente coletado: {latest_block_hash}")
+        logger.info(f"Latest block hash collected: {latest_block_hash}", extra={'event': 'fetch_blockchain_data_success'})
         
         data_bytes = latest_block_hash.encode('utf-8')
         sha256_hash = hashlib.sha256(data_bytes).hexdigest()
@@ -50,22 +59,21 @@ def get_entropy_from_blockchain():
         return sha256_hash
         
     except requests.exceptions.RequestException as e:
-        print(f"[{datetime.now()}] Erro na requisição HTTP: {e}")
+        logger.error(f"HTTP request error: {e}", extra={'event': 'fetch_blockchain_http_error'})
         return None
     except Exception as e:
-        print(f"[{datetime.now()}] Ocorreu um erro ao processar os dados: {e}")
+        logger.error(f"An error occurred while processing data: {e}", extra={'event': 'fetch_blockchain_processing_error'}, exc_info=True)
         return None
 
 if __name__ == "__main__":
+    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
+        print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
+    logger.info("Blockchain harvester starting up...")
     while True:
         generated_hash = get_entropy_from_blockchain()
         
         if generated_hash:
-            print("\n--- Hash de Entropia Gerado ---")
-            print(generated_hash)
             send_hash_to_mixer(generated_hash)
-        else:
-            print("\nFalha ao gerar o hash. A entropia não foi coletada.")
         
         # Intervalo ajustado para 5 minutos (300 segundos)
         # Isso respeita o limite da API e ainda captura novos blocos

@@ -90,39 +90,91 @@ Os serviços estarão disponíveis nas seguintes portas:
 
 Todas as requisições são feitas ao serviço **Generator** na porta `5001`.
 
-### Gerar um Número Aleatório Simples
+### Verificar a Saúde do Serviço (Health Check)
 
-Retorna um número aleatório de 64 bits como um inteiro.
+Antes de fazer requisições, é uma boa prática verificar se o serviço está pronto.
 
--   **Endpoint**: `GET /api/v1/random`
+-   **Endpoint**: `GET /api/v1/health`
 -   **Exemplo com `curl`**:
     ```bash
-    curl http://localhost:5001/api/v1/random
+    curl http://localhost:5001/api/v1/health
+    ```
+-   **Resposta Esperada (Pronto)**:
+    ```json
+    {
+      "status": "ok",
+      "message": "Gerador está pronto."
+    }
+    ```
+-   **Resposta Esperada (Inicializando)**:
+    ```json
+    {
+      "status": "error",
+      "message": "Gerador está inicializando."
+    }
+    ```
+
+### Gerar Números para Jogo (Slot 5x3)
+
+Retorna 15 números aleatórios para um jogo de slot. **Requer autenticação.**
+
+-   **Endpoint**: `GET /api/v1/games/slot_5x3`
+-   **Autenticação**: Header `X-RNG-Auth` com um HMAC-SHA256 do corpo vazio.
+-   **Exemplo com `curl`**:
+    ```bash
+    # Gere o HMAC para um corpo vazio e adicione ao header
+    curl -H "X-RNG-Auth: <HMAC_GERADO_AQUI>" http://localhost:5001/api/v1/games/slot_5x3
     ```
 -   **Resposta Esperada**:
     ```json
     {
-      "random_number": 8360311362399349423
+      "game": "slot_5x3",
+      "drawn_numbers": [ 1, 8, 0, 5, 3, 9, 2, 7, 6, 4, 8, 2, 1, 5, 7 ],
+      "status": "success"
     }
     ```
 
-### Gerar um Número com Pesos (Sorteio Ponderado)
+### Realizar Sorteio com Pesos
 
-Sorteia um item de uma lista com base em probabilidades definidas.
+Sorteia itens de uma lista com base em probabilidades definidas. **Requer autenticação.**
 
--   **Endpoint**: `POST /api/v1/biased-random`
--   **Corpo da Requisição (JSON)**: Um dicionário onde as chaves são os itens e os valores são seus pesos (probabilidades).
+-   **Endpoint**: `POST /api/v1/games/draw_symbols`
+-   **Autenticação**: Header `X-RNG-Auth` com um HMAC-SHA256 do corpo da requisição JSON.
+-   **Corpo da Requisição (JSON)**: Uma lista de dicionários com `name` e `weight`.
 -   **Exemplo com `curl`**:
     ```bash
+    # Corpo da requisição
+    BODY='{"symbols":[{"name":"bronze","weight":70},{"name":"prata","weight":20},{"name":"ouro","weight":10}]}'
+    # Gere o HMAC para o corpo do JSON e adicione ao header
     curl -X POST -H "Content-Type: application/json" \
-      -d '{"bronze": 0.7, "prata": 0.2, "ouro": 0.1}' \
-      http://localhost:5001/api/v1/biased-random
+      -H "X-RNG-Auth: <HMAC_GERADO_AQUI_PARA_O_BODY>" \
+      -d "$BODY" \
+      http://localhost:5001/api/v1/games/draw_symbols
     ```
 -   **Resposta Esperada**:
     ```json
     {
-      "result": "bronze"
+      "status": "success",
+      "drawn_symbols": [ "bronze", "bronze", "prata", "bronze", "ouro", "bronze", "bronze", "bronze", "prata", "bronze", "bronze", "bronze", "bronze", "prata", "bronze" ]
     }
+    ```
+
+### Baixar Logs de Auditoria
+
+-   Retorna o arquivo de log de auditoria (`audit.log`). **Requer autenticação.**
+
+-   **Endpoint**: `GET /api/v1/audit/logs`
+-   **Autenticação**: Header `X-RNG-Auth` com um HMAC-SHA256 do corpo vazio.
+-   **Exemplo com `curl` e Python**:
+    ```bash
+    # 1. Obtenha sua chave secreta do arquivo .env
+    API_KEY="sua_chave_secreta_aqui"
+
+    # 2. Gere o HMAC usando Python
+    HMAC=$(python -c "import hmac, hashlib; print(hmac.new(b'$API_KEY', b'', hashlib.sha256).hexdigest())")
+
+    # 3. Faça a requisição com o HMAC gerado
+    curl -H "X-RNG-Auth: $HMAC" http://localhost:5001/api/v1/audit/logs -o audit.log
     ```
 
 ---

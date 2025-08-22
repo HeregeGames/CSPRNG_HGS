@@ -9,7 +9,7 @@ import pyaudio
 
 # --- Configurações ---
 MIXER_SERVER_URL = "http://mixer:5000"
-API_AUTH_KEY = os.getenv("API_AUTH_KEY", "f8a2344b1d77a87560dd8f8d40982ff3b4fcb0e0b4dd0cb6a8f722a3ba4d274c").encode('utf-8')
+API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
 # URL de um stream de áudio estável para demonstração
 RADIO_STREAM_URL = "http://radio.garden/api/tune/I4yFz9pM"
 CHUNK_SIZE = 1024 * 16  # 16 KB de dados por coleta
