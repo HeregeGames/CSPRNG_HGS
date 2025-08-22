@@ -114,51 +114,6 @@ Antes de fazer requisições, é uma boa prática verificar se o serviço está 
     }
     ```
 
-### Gerar Números para Jogo (Slot 5x3)
-
-Retorna 15 números aleatórios para um jogo de slot. **Requer autenticação.**
-
--   **Endpoint**: `GET /api/v1/games/slot_5x3`
--   **Autenticação**: Header `X-RNG-Auth` com um HMAC-SHA256 do corpo vazio.
--   **Exemplo com `curl`**:
-    ```bash
-    # Gere o HMAC para um corpo vazio e adicione ao header
-    curl -H "X-RNG-Auth: <HMAC_GERADO_AQUI>" http://localhost:5001/api/v1/games/slot_5x3
-    ```
--   **Resposta Esperada**:
-    ```json
-    {
-      "game": "slot_5x3",
-      "drawn_numbers": [ 1, 8, 0, 5, 3, 9, 2, 7, 6, 4, 8, 2, 1, 5, 7 ],
-      "status": "success"
-    }
-    ```
-
-### Realizar Sorteio com Pesos
-
-Sorteia itens de uma lista com base em probabilidades definidas. **Requer autenticação.**
-
--   **Endpoint**: `POST /api/v1/games/draw_symbols`
--   **Autenticação**: Header `X-RNG-Auth` com um HMAC-SHA256 do corpo da requisição JSON.
--   **Corpo da Requisição (JSON)**: Uma lista de dicionários com `name` e `weight`.
--   **Exemplo com `curl`**:
-    ```bash
-    # Corpo da requisição
-    BODY='{"symbols":[{"name":"bronze","weight":70},{"name":"prata","weight":20},{"name":"ouro","weight":10}]}'
-    # Gere o HMAC para o corpo do JSON e adicione ao header
-    curl -X POST -H "Content-Type: application/json" \
-      -H "X-RNG-Auth: <HMAC_GERADO_AQUI_PARA_O_BODY>" \
-      -d "$BODY" \
-      http://localhost:5001/api/v1/games/draw_symbols
-    ```
--   **Resposta Esperada**:
-    ```json
-    {
-      "status": "success",
-      "drawn_symbols": [ "bronze", "bronze", "prata", "bronze", "ouro", "bronze", "bronze", "bronze", "prata", "bronze", "bronze", "bronze", "bronze", "prata", "bronze" ]
-    }
-    ```
-
 ### Baixar Logs de Auditoria
 
 -   Retorna o arquivo de log de auditoria (`audit.log`). **Requer autenticação.**
@@ -176,21 +131,3 @@ Sorteia itens de uma lista com base em probabilidades definidas. **Requer autent
     # 3. Faça a requisição com o HMAC gerado
     curl -H "X-RNG-Auth: $HMAC" http://localhost:5001/api/v1/audit/logs -o audit.log
     ```
-
----
-
-## Estrutura do Projeto
-
-O projeto está organizado em uma estrutura de microserviços para maior clareza e manutenibilidade.
-
-```
-CSPRNG_HGS/
-├── docker-compose.yml     # Orquestrador dos serviços
-├── .env.example           # Exemplo de arquivo de configuração
-├── services/              # Contém o código de todos os serviços
-│   ├── common/            # Código compartilhado (ex: autenticação)
-│   ├── generator/         # Serviço Gerador (API pública)
-│   ├── mixer/             # Serviço Mixer (Pool de Entropia)
-│   └── harvester_*/       # Múltiplos serviços de coleta de entropia
-└── README.md              # Esta documentação
-```
