@@ -3,7 +3,6 @@ import requests
 import hashlib
 import time
 from datetime import datetime
-import hmac
 import logging
 import logging.config
 from common.auth import create_hmac
@@ -17,21 +16,19 @@ MIXER_SERVER_URL = "http://mixer:5000"
 # Nova API pública do BlockCypher para os últimos blocos do Bitcoin
 API_URL = "https://api.blockcypher.com/v1/btc/main"
 
-API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
-
 def send_hash_to_mixer(hash_value):
     """Envia o hash gerado para o Servidor Mixer com autenticação HMAC."""
     url = f"{MIXER_SERVER_URL}/api/v1/entropy"
     try:
         data_bytes = bytes.fromhex(hash_value)
-        hmac_digest = hmac.new(API_AUTH_KEY, data_bytes, hashlib.sha256).hexdigest()
+        hmac_digest = create_hmac(data_bytes)
         
         headers = {'X-RNG-Auth': hmac_digest}
         response = requests.post(url, data=data_bytes, headers=headers, timeout=5)
         response.raise_for_status()
-        print(f"[{datetime.now()}] Hash enviado com sucesso para o Mixer. Resposta: {response.json()}")
+        logger.info("Hash sent to mixer successfully.", extra={'event': 'send_hash_success', 'response': response.json()})
     except requests.exceptions.RequestException as e:
-        print(f"[{datetime.now()}] Erro ao enviar hash para o Mixer: {e}")
+        logger.error(f"Error sending hash to mixer: {e}", extra={'event': 'send_hash_failure'})
 
 
 def get_entropy_from_blockchain():
@@ -66,8 +63,6 @@ def get_entropy_from_blockchain():
         return None
 
 if __name__ == "__main__":
-    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
-        print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
     logger.info("Blockchain harvester starting up...")
     while True:
         generated_hash = get_entropy_from_blockchain()

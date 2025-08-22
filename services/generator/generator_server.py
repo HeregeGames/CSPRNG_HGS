@@ -116,27 +116,57 @@ def auth_required(f):
 
 def perform_weighted_draw(symbols: list, num_draws: int, csprng: DeterministicCSPRNG):
     """
-    Realiza um sorteio ponderado de símbolos usando o CSPRNG.
+    Realiza um sorteio ponderado de símbolos usando o CSPRNG, evitando o viés de módulo.
     """
     drawn_symbols = []
     
     weighted_list = []
     for symbol in symbols:
+        # Validação de entrada para garantir a integridade dos dados
+        if not isinstance(symbol.get('name'), str) or not isinstance(symbol.get('weight'), int) or symbol.get('weight') <= 0:
+            raise ValueError("Cada símbolo deve ter um 'name' (string) e um 'weight' (inteiro positivo).")
         weighted_list.extend([symbol['name']] * symbol['weight'])
         
-    required_bytes = num_draws * 4
-    random_bytes = csprng.generate(required_bytes)
-    
     list_size = len(weighted_list)
-    
-    for i in range(num_draws):
-        sub_bytes = random_bytes[i*4 : (i+1)*4]
-        random_value = int.from_bytes(sub_bytes, 'big')
-        
-        index = random_value % list_size
-        drawn_symbols.append(weighted_list[index])
+    if list_size == 0:
+        return []
+
+    # Calcula o número de bits necessários para representar o índice máximo
+    # e os bytes correspondentes. Isso otimiza o uso de bytes aleatórios.
+    num_bits = list_size.bit_length()
+    num_bytes_per_draw = (num_bits + 7) // 8
+
+    # O maior valor que podemos gerar com num_bytes
+    range_size = 1 << (num_bytes_per_draw * 8)
+    # O maior múltiplo de list_size que é menor que range_size para evitar o viés
+    max_valid_value = (range_size // list_size) * list_size
+
+    for _ in range(num_draws):
+        while True:
+            random_bytes = csprng.generate(num_bytes_per_draw)
+            random_value = int.from_bytes(random_bytes, 'big')
+            
+            # Rejection sampling: descarta valores que introduziriam viés
+            if random_value < max_valid_value:
+                index = random_value % list_size
+                drawn_symbols.append(weighted_list[index])
+                break
     
     return drawn_symbols
+
+def generate_unbiased_in_range(max_val: int, num_draws: int, csprng: DeterministicCSPRNG) -> list[int]:
+    """Gera uma lista de números em [0, max_val-1] sem viés de módulo."""
+    # Rejection sampling para garantir uma distribuição uniforme.
+    drawn_numbers = []
+    for _ in range(num_draws):
+        while True:
+            # Gera um único byte aleatório (0-255)
+            random_byte = csprng.generate(1)[0]
+            # Descarta valores que introduziriam viés (250-255)
+            if random_byte < 250:
+                drawn_numbers.append(random_byte % max_val)
+                break
+    return drawn_numbers
 
 @app.before_request
 def check_csprng_initialized():
@@ -169,8 +199,8 @@ def get_slot_5x3_numbers():
         'method': request.method,
         'ip': request.remote_addr
     }
-    random_bytes = csprng_instance.generate(15)
-    drawn_numbers = [byte % 10 for byte in random_bytes]
+    # Gera 15 números na faixa de 0-9 sem viés
+    drawn_numbers = generate_unbiased_in_range(10, 15, csprng_instance)
     
     audit_log['status'] = 'success'
     logger.info("Slot 5x3 request processed.", extra=audit_log)
@@ -181,7 +211,7 @@ def get_slot_5x3_numbers():
     })
 
 @app.route("/api/v1/games/draw_symbols", methods=["POST"])
-# @auth_required
+@auth_required
 def draw_symbols_from_config():
     request_data = request.json
     symbols_config = request_data.get("symbols")

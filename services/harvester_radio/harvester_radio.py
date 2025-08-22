@@ -1,64 +1,82 @@
 import requests
 import hashlib
 import time
-from datetime import datetime
-import hmac
-import os
-import wave
-import pyaudio
+import logging
+import logging.config
+from common.auth import create_hmac
+from common.logging_config import LOGGING_CONFIG
 
-# --- Configurações ---
+# --- Configuration ---
 MIXER_SERVER_URL = "http://mixer:5000"
-API_AUTH_KEY = os.getenv("API_AUTH_KEY", "SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI").encode('utf-8')
-# URL de um stream de áudio estável para demonstração
-RADIO_STREAM_URL = "http://radio.garden/api/tune/I4yFz9pM"
-CHUNK_SIZE = 1024 * 16  # 16 KB de dados por coleta
+# A public radio stream URL. Streams with less compression or more talk/variety are often better sources.
+RADIO_STREAM_URL = "http://stream.live.vc.bbcmedia.co.uk/bbc_world_service"
+CHUNK_SIZE = 4096  # How many bytes to read from the stream at a time
+CAPTURE_DURATION_SECONDS = 2  # Capture 2 seconds of audio for each hash
+
+# --- Logging Configuration ---
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger(__name__)
 
 def send_hash_to_mixer(hash_value):
-    """Envia o hash gerado para o Servidor Mixer com autenticação HMAC."""
+    """Sends the generated hash to the Mixer Server with HMAC authentication."""
     url = f"{MIXER_SERVER_URL}/api/v1/entropy"
     try:
         data_bytes = bytes.fromhex(hash_value)
-        hmac_digest = hmac.new(API_AUTH_KEY, data_bytes, hashlib.sha256).hexdigest()
+        hmac_digest = create_hmac(data_bytes)
         
         headers = {'X-RNG-Auth': hmac_digest}
-        response = requests.post(url, data=data_bytes, headers=headers, timeout=5)
+        response = requests.post(url, data=data_bytes, headers=headers, timeout=10)
         response.raise_for_status()
-        print(f"[{datetime.now()}] Hash enviado com sucesso para o Mixer. Resposta: {response.json()}")
+        logger.info("Hash sent to mixer successfully.", extra={'event': 'send_hash_success', 'response': response.json()})
     except requests.exceptions.RequestException as e:
-        print(f"[{datetime.now()}] Erro ao enviar hash para o Mixer: {e}")
+        logger.error(f"Error sending hash to mixer: {e}", extra={'event': 'send_hash_failure'})
+
+def extract_lsb_entropy(audio_data: bytes) -> bytes:
+    """
+    Extracts the Least Significant Bit (LSB) from each byte of the audio data.
+    This concentrates the noise, which is a better source of entropy than raw audio.
+    """
+    bits = [byte & 1 for byte in audio_data]
+
+    # Pack bits into a bytearray for hashing
+    entropy_bytes = bytearray()
+    for i in range(0, len(bits), 8):
+        byte_chunk = bits[i:i+8]
+        byte_val = 0
+        for bit in byte_chunk:
+            byte_val = (byte_val << 1) | bit
+        entropy_bytes.append(byte_val)
+        
+    return bytes(entropy_bytes)
 
 def get_entropy_from_radio():
-    """
-    Coleta dados binários de um stream de rádio e gera um hash.
-    Requer a instalação de 'pyaudio'.
-    """
+    """Captures audio from an online radio stream and extracts entropy from it."""
     try:
-        print(f"[{datetime.now()}] Conectando ao stream de rádio...")
-        
-        response = requests.get(RADIO_STREAM_URL, stream=True)
-        response.raise_for_status()
-        
-        hash_object = hashlib.sha256()
-        
-        # Lê um pedaço de dados do stream
-        chunk = next(response.iter_content(CHUNK_SIZE))
-        if not chunk:
-            print(f"[{datetime.now()}] Falha ao coletar dados do stream.")
-            return None
+        logger.info("Connecting to radio stream...", extra={'event': 'radio_stream_connect', 'url': RADIO_STREAM_URL})
+        with requests.get(RADIO_STREAM_URL, stream=True, timeout=10) as response:
+            response.raise_for_status()
             
-        hash_object.update(chunk)
-        return hash_object.hexdigest()
-        
+            audio_data = bytearray()
+            start_time = time.time()
+            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                audio_data.extend(chunk)
+                if time.time() - start_time > CAPTURE_DURATION_SECONDS:
+                    break
+            
+            if not audio_data:
+                logger.warning("No data received from radio stream.", extra={'event': 'radio_stream_empty'})
+                return None
+
+            noise_data = extract_lsb_entropy(audio_data)
+            return hashlib.sha256(noise_data).hexdigest()
+
     except requests.exceptions.RequestException as e:
-        print(f"[{datetime.now()}] Erro ao coletar entropia do rádio: {e}")
+        logger.error(f"Failed to connect to radio stream: {e}", extra={'event': 'radio_stream_failure'})
         return None
 
 if __name__ == "__main__":
-    if API_AUTH_KEY == b"SUA_CHAVE_SECRETA_MUITO_FORTE_AQUI":
-        print("AVISO: Usando a chave secreta padrão. Altere a variável de ambiente 'API_AUTH_KEY' para uma chave segura!")
+    logger.info("Radio harvester starting up...")
     while True:
-        hash_data = get_entropy_from_radio()
-        if hash_data:
-            send_hash_to_mixer(hash_data)
-        time.sleep(60)  # Coleta a cada 60 segundos
+        if generated_hash := get_entropy_from_radio():
+            send_hash_to_mixer(generated_hash)
+        time.sleep(60) # 1 minute interval
