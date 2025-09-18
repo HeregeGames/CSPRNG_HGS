@@ -154,19 +154,34 @@ def perform_weighted_draw(symbols: list, num_draws: int, csprng: DeterministicCS
     
     return drawn_symbols
 
-def generate_unbiased_in_range(max_val: int, num_draws: int, csprng: DeterministicCSPRNG) -> list[int]:
-    """Gera uma lista de números em [0, max_val-1] sem viés de módulo."""
-    # Rejection sampling para garantir uma distribuição uniforme.
-    drawn_numbers = []
-    for _ in range(num_draws):
-        while True:
-            # Gera um único byte aleatório (0-255)
-            random_byte = csprng.generate(1)[0]
-            # Descarta valores que introduziriam viés (250-255)
-            if random_byte < 250:
-                drawn_numbers.append(random_byte % max_val)
-                break
-    return drawn_numbers
+def generate_unbiased_number(min_val: int, max_val: int, csprng: DeterministicCSPRNG) -> int:
+    """
+    Gera um único número inteiro no intervalo [min_val, max_val] (inclusivo)
+    usando rejection sampling para evitar viés de módulo.
+    """
+    if min_val > max_val:
+        raise ValueError("O valor mínimo não pode ser maior que o valor máximo.")
+    
+    range_size = max_val - min_val + 1
+    if range_size == 0:
+        return min_val
+
+    # Calcula o número de bits e bytes necessários para representar o range.
+    num_bits = range_size.bit_length()
+    num_bytes = (num_bits + 7) // 8
+
+    # O maior valor que podemos gerar com num_bytes
+    max_gen_val = (1 << (num_bytes * 8)) - 1
+    # O maior múltiplo de range_size que é menor ou igual a max_gen_val
+    max_valid_val = (max_gen_val // range_size) * range_size
+
+    while True:
+        random_bytes = csprng.generate(num_bytes)
+        random_value = int.from_bytes(random_bytes, 'big')
+        
+        if random_value < max_valid_val:
+            return min_val + (random_value % range_size)
+
 
 @app.before_request
 def check_csprng_initialized():
@@ -199,8 +214,8 @@ def get_slot_5x3_numbers():
         'method': request.method,
         'ip': request.remote_addr
     }
-    # Gera 15 números na faixa de 0-9 sem viés
-    drawn_numbers = generate_unbiased_in_range(10, 15, csprng_instance)
+    # Gera 15 números na faixa de 0-9 (10-1) sem viés
+    drawn_numbers = [generate_unbiased_number(0, 9, csprng_instance) for _ in range(15)]
     
     audit_log['status'] = 'success'
     logger.info("Slot 5x3 request processed.", extra=audit_log)
@@ -210,11 +225,51 @@ def get_slot_5x3_numbers():
         "status": "success"
     })
 
+@app.route("/api/v1/rng/draw_numbers", methods=["POST"])
+@auth_required
+def draw_numbers_in_ranges():
+    """
+    Recebe uma lista de ranges [[min, max], ...] e retorna um número aleatório para cada range.
+    """
+    request_data = request.json
+    ranges = request_data.get("ranges")
+    audit_log = {
+        'event': 'api_request',
+        'endpoint': request.path,
+        'method': request.method,
+        'ip': request.remote_addr,
+        'request_body': request_data
+    }
+
+    if not isinstance(ranges, list) or not all(isinstance(r, list) and len(r) == 2 for r in ranges):
+        msg = "A chave 'ranges' deve ser uma lista de listas, onde cada sublista é um par [min, max]."
+        audit_log.update({'status': 'failure', 'reason': msg})
+        logger.warning(msg, extra=audit_log)
+        return jsonify({"status": "error", "message": msg}), 400
+
+    try:
+        drawn_numbers = []
+        for r in ranges:
+            min_val, max_val = int(r[0]), int(r[1])
+            drawn_numbers.append(generate_unbiased_number(min_val, max_val, csprng_instance))
+
+        audit_log.update({'status': 'success', 'result': drawn_numbers})
+        logger.info("draw_numbers request processed.", extra=audit_log)
+        return jsonify({
+            "status": "success",
+            "drawn_numbers": drawn_numbers
+        })
+    except (ValueError, TypeError) as e:
+        audit_log.update({'status': 'failure', 'reason': str(e)})
+        logger.error(f"Error during number draw: {e}", extra=audit_log, exc_info=True)
+        return jsonify({"status": "error", "message": f"Erro nos dados do range: {e}"}), 400
+
 @app.route("/api/v1/games/draw_symbols", methods=["POST"])
 @auth_required
 def draw_symbols_from_config():
     request_data = request.json
     symbols_config = request_data.get("symbols")
+    num_draws = request_data.get("num_draws", 15) # Pega o número de sorteios, com padrão 15
     audit_log = {
         'event': 'api_request',
         'endpoint': request.path,
@@ -228,9 +283,14 @@ def draw_symbols_from_config():
         logger.warning("Invalid symbols configuration provided.", extra=audit_log)
         return jsonify({"status": "error", "message": "Invalid symbols configuration provided."}), 400
     
+    if not isinstance(num_draws, int) or num_draws <= 0:
+        audit_log.update({'status': 'failure', 'reason': 'Invalid num_draws value'})
+        logger.warning("Invalid num_draws value provided. Must be a positive integer.", extra=audit_log)
+        return jsonify({"status": "error", "message": "Invalid 'num_draws' value. Must be a positive integer."}), 400
+
     try:
         # Usa a instância global diretamente
-        drawn_symbols = perform_weighted_draw(symbols_config, 15, csprng_instance)
+        drawn_symbols = perform_weighted_draw(symbols_config, num_draws, csprng_instance)
         
         audit_log.update({'status': 'success', 'result': drawn_symbols})
         logger.info("Symbol draw request processed.", extra=audit_log)
