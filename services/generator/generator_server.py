@@ -1,3 +1,6 @@
+# Desenvolvido por: Leandro M. da Costa (HG Studios)
+#
+
 import os
 import hashlib
 from flask import Flask, request, jsonify, Response, send_from_directory

@@ -1,3 +1,6 @@
+# Desenvolvido por: Leandro M. da Costa (HG Studios)
+#
+
 import os
 import requests
 import hashlib

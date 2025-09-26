@@ -1,3 +1,6 @@
+# Desenvolvido por: Leandro M. da Costa (HG Studios)
+#
+
 import hashlib
 import threading
 from flask import Flask, request, jsonify, Response

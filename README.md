@@ -1,6 +1,6 @@
 # CSPRNG - Gerador de Números Aleatórios Criptograficamente Seguro
 
-[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)](https://github.com/herege/CSPRNG_HGS)
+[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)]()
 
 Um sistema distribuído e resiliente para a geração de números aleatórios de alta qualidade, ideal para aplicações que exigem segurança e imprevisibilidade, como criptografia, sorteios e jogos.
 
@@ -131,3 +131,9 @@ Antes de fazer requisições, é uma boa prática verificar se o serviço está 
     # 3. Faça a requisição com o HMAC gerado
     curl -H "X-RNG-Auth: $HMAC" http://localhost:5001/api/v1/audit/logs -o audit.log
     ```
+
+---
+
+## Licença
+
+Este projeto é distribuído sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
