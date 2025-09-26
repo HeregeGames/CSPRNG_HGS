@@ -1,0 +1,25 @@
+# Ambientes Virtuais
+venv/
+*.venv
+env/
+.env
+
+# Arquivos de Cache do Python
+__pycache__/
+*.py[cod]
+*.class
+
+# Arquivos de configuração de IDEs
+.vscode/
+.idea/
+
+# Arquivos de teste
+.pytest_cache/
+.tox/
+.coverage
+
+# Arquivos do S.O.
+.DS_Store
+Thumbs.db
+
+audit.log

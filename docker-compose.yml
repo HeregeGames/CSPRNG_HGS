@@ -1,0 +1,102 @@
+ version: '3.8'
+ 
+ services:
+   mixer:
+     build:
+       context: .
+       dockerfile: services/mixer/Dockerfile
+     container_name: mixer
+     ports:
+       - "5000:5000"
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     restart: unless-stopped
+   
+   generator:
+     build:
+       context: .
+       dockerfile: services/generator/Dockerfile
+     container_name: generator
+     ports:
+       - "5001:5001"
+     env_file:
+       - .env
+     networks:
+       - rng_network
+       - herege-network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+   harvester_radio:
+     build:
+       context: .
+       dockerfile: services/harvester_radio/Dockerfile
+     container_name: harvester_radio
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+  
+   harvester_currency:
+     build:
+       context: .
+       dockerfile: services/harvester_currency/Dockerfile
+     container_name: harvester_currency
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+   
+   harvester_blockchain:
+     build:
+       context: .
+       dockerfile: services/harvester_blockchain/Dockerfile
+     container_name: harvester_blockchain
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+   harvester_weather:
+     build:
+       context: .
+       dockerfile: services/harvester_weather/Dockerfile
+     container_name: harvester_weather
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+   harvester_latency:
+     build:
+       context: .
+       dockerfile: services/harvester_latency/Dockerfile
+     container_name: harvester_latency
+     env_file:
+       - .env
+     networks:
+       - rng_network
+     depends_on:
+       - mixer
+     restart: unless-stopped
+ 
+ networks:
+   rng_network:
+     driver: bridge
+   herege-network:
+     external: true
