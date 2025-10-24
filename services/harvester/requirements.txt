@@ -1,3 +1,4 @@
 requests
-pyaudio
+ping3
+PyAudio
 python-json-logger

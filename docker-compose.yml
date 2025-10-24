@@ -30,65 +30,34 @@
        - mixer
      restart: unless-stopped
  
-   harvester_radio:
+   # Exemplo 1: Um harvester para fontes rápidas (latência e rádio)
+   harvester_fast:
      build:
        context: .
-       dockerfile: services/harvester_radio/Dockerfile
-     container_name: harvester_radio
+       dockerfile: services/harvester/Dockerfile # Você precisará criar este Dockerfile
+     container_name: harvester_fast
      env_file:
        - .env
+     environment:
+       - HARVESTER_SOURCES=latency,radio
+     devices:
+       - "/dev/snd:/dev/snd"
      networks:
        - rng_network
      depends_on:
        - mixer
      restart: unless-stopped
-  
-   harvester_currency:
+
+   # Exemplo 2: Um harvester para fontes mais lentas (APIs externas)
+   harvester_slow:
      build:
        context: .
-       dockerfile: services/harvester_currency/Dockerfile
-     container_name: harvester_currency
+       dockerfile: services/harvester/Dockerfile # Reutiliza o mesmo Dockerfile
+     container_name: harvester_slow
      env_file:
        - .env
-     networks:
-       - rng_network
-     depends_on:
-       - mixer
-     restart: unless-stopped
-   
-   harvester_blockchain:
-     build:
-       context: .
-       dockerfile: services/harvester_blockchain/Dockerfile
-     container_name: harvester_blockchain
-     env_file:
-       - .env
-     networks:
-       - rng_network
-     depends_on:
-       - mixer
-     restart: unless-stopped
- 
-   harvester_weather:
-     build:
-       context: .
-       dockerfile: services/harvester_weather/Dockerfile
-     container_name: harvester_weather
-     env_file:
-       - .env
-     networks:
-       - rng_network
-     depends_on:
-       - mixer
-     restart: unless-stopped
- 
-   harvester_latency:
-     build:
-       context: .
-       dockerfile: services/harvester_latency/Dockerfile
-     container_name: harvester_latency
-     env_file:
-       - .env
+     environment:
+       - HARVESTER_SOURCES=blockchain,currency,weather
      networks:
        - rng_network
      depends_on:

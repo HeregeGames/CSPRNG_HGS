@@ -17,6 +17,8 @@ __pycache__/
 .pytest_cache/
 .tox/
 .coverage
+random_data.bin
+random_numbers.txt
 
 # Arquivos do S.O.
 .DS_Store
