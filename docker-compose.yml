@@ -42,6 +42,8 @@
        - HARVESTER_SOURCES=latency,radio
      devices:
        - "/dev/snd:/dev/snd"
+     group_add:
+       - audio
      networks:
        - rng_network
      depends_on:
